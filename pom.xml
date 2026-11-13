@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.example</groupId>
+    <artifactId>skeleton-starter-vaadin-swing-bridge-swt</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <!-- The Spring Boot parent derives maven.compiler.release from
+             java.version; setting maven.compiler.source alone has no effect. -->
+        <java.version>21</java.version>
+        <vaadin.version>25.3.5</vaadin.version>
+        <!-- Vaadin Swing Bridge, which the SWT extension builds on. Use the
+             version the extension release was built against (1.4.0-alpha1 for
+             1.0.0-alpha1): the extension uses Swing Bridge internals that can
+             change between versions. -->
+        <swing-bridge.version>1.4.0-alpha1</swing-bridge.version>
+        <!-- The SWT extension, from the Vaadin Directory. -->
+        <swing-bridge-swt.version>1.0.0-alpha1</swing-bridge-swt.version>
+        <!-- The SWT the applications run with, loaded once for all of them. -->
+        <swt.version>3.135.0</swt.version>
+        <!-- For the bridge's runtime, which calls Windows through JNA. -->
+        <jna.version>5.17.0</jna.version>
+        <!-- Where the build puts the jars of the bridge's shared SWT class
+             loader: SWT and JNA. -->
+        <swt.bridge.dir>${project.build.directory}/swt-bridge</swt.bridge.dir>
+        <!-- The Win32 SWT build for the server's CPU (see the profiles). -->
+        <swt.runtime.platform>win32.win32.x86_64</swt.runtime.platform>
+    </properties>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <repositories>
+        <!-- Vaadin Directory add-ons, for the SWT extension. -->
+        <repository>
+            <id>vaadin-addons</id>
+            <url>https://maven.vaadin.com/vaadin-addons</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <!-- Vaadin pre-releases, for Swing Bridge 1.4.0-alpha1. Everything
+             else comes from Maven Central. -->
+        <repository>
+            <id>vaadin-prereleases</id>
+            <url>https://maven.vaadin.com/vaadin-prereleases/</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.vaadin</groupId>
+                <artifactId>vaadin-bom</artifactId>
+                <version>${vaadin.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Vaadin Swing Bridge (commercial; needs a Swing Bridge license).
+             Its Log4j2 binding clashes with Spring Boot's logging. -->
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>swing-bridge-flow</artifactId>
+            <version>${swing-bridge.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j2-impl</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-core</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- The SWT extension: the SwtBridge component. -->
+        <dependency>
+            <groupId>org.vaadin.addons.componentfactory</groupId>
+            <artifactId>swing-bridge-swt-flow</artifactId>
+            <version>${swing-bridge-swt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <!-- Replace artifactId with vaadin-core to use only free components -->
+            <artifactId>vaadin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-dev</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <defaultGoal>spring-boot:run</defaultGoal>
+        <plugins>
+            <plugin>
+                <groupId>com.vaadin</groupId>
+                <artifactId>vaadin-maven-plugin</artifactId>
+                <version>${vaadin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-frontend</goal>
+                            <goal>build-frontend</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- The bridge's shared SWT class loader, at stable
+                             names: SWT and JNA. The bridge's runtime is in the
+                             extension's jar. The application's own jars come
+                             from applibs/. -->
+                        <id>copy-swt-bridge</id>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <phase>process-resources</phase>
+                        <configuration>
+                            <outputDirectory>${swt.bridge.dir}</outputDirectory>
+                            <stripVersion>true</stripVersion>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.eclipse.platform</groupId>
+                                    <artifactId>org.eclipse.swt.${swt.runtime.platform}</artifactId>
+                                    <version>${swt.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>net.java.dev.jna</groupId>
+                                    <artifactId>jna</artifactId>
+                                    <version>${jna.version}</version>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- The debug agent for `mvn spring-boot:run`: attach an
+                         IDE debugger to localhost:5005. It is bound to
+                         loopback on purpose; `address=*:5005` would accept
+                         connections from the network. -->
+                    <jvmArguments>
+                        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:5005
+                    </jvmArguments>
+                    <!-- JVM -D system properties -->
+                    <systemPropertyVariables>
+                        <swingbridge.swt.libDir>${swt.bridge.dir}</swingbridge.swt.libDir>
+                        <!-- Directory scanned for the SWT application's JARs.
+                             Defaults to applibs/ next to the project. -->
+                        <!--<applibs.dir>${project.basedir}/some-lib-dir</applibs.dir>-->
+                        <!-- Your application's own system properties go here
+                             too: every user's application runs in this JVM.
+                             WarehousePro keeps its H2 database at
+                             -Dwarehouse.db. -->
+                        <warehouse.db>${project.basedir}/warehousedb</warehouse.db>
+                        <!-- Bridge tuning. All optional; the defaults below are
+                             what you get if you leave these commented out. -->
+                        <!-- Milliseconds between captures of an application
+                             while it or its user is active, and when idle. -->
+                        <!--<swingbridge.swt.frameInterval>40</swingbridge.swt.frameInterval>-->
+                        <!--<swingbridge.swt.idleFrameInterval>300</swingbridge.swt.idleFrameInterval>-->
+                        <!-- Log every message posted to the applications, to
+                             diagnose input problems. -->
+                        <!--<swingbridge.swt.debugInput>true</swingbridge.swt.debugInput>-->
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Windows on ARM, for example a UTM or Parallels VM on an Apple
+             Silicon Mac. -->
+        <profile>
+            <id>swt-runtime-aarch64</id>
+            <activation>
+                <os>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <properties>
+                <swt.runtime.platform>win32.win32.aarch64</swt.runtime.platform>
+            </properties>
+        </profile>
+    </profiles>
+</project>
